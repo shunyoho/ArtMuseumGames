@@ -66,7 +66,7 @@
     }
 
     $('back').onclick = () => { $('show').hidden = true; $('picker').hidden = false; };
-    $('logout').onclick = async () => { await db.auth.signOut(); location.replace('index.html'); };
+    $('logout').onclick = logout;
 
     (async () => {
       const user = await requireLogin();

@@ -30,6 +30,15 @@ async function requireLogin() {
   return session.user;
 }
 
+// 登出：scope 'local' 只清除這台裝置的登入狀態，不需要連線，所以不會因為網路或伺服器錯誤而登出失敗
+async function logout() {
+  try {
+    await db.auth.signOut({ scope: 'local' });
+  } finally {
+    location.replace('index.html');
+  }
+}
+
 function toast(msg, type = 'info') {
   let el = document.getElementById('toast');
   if (!el) {

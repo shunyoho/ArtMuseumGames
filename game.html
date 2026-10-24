@@ -10,7 +10,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">美</span><div>美館闖關趣<small>高雄市立美術館</small></div></div>
+    <div class="brand"><span class="brand-mark">美</span><div>美館闖關趣<small>活動位置:高雄市立美術館</small></div></div>
     <button class="link-btn" id="logout">登出</button>
   </header>
 
@@ -159,7 +159,7 @@
     document.getElementById('scanBtn').onclick = openScanner;
     document.getElementById('closeScan').onclick = closeScanner;
     document.getElementById('resOk').onclick = () => document.getElementById('resultOverlay').classList.remove('open');
-    document.getElementById('logout').onclick = async () => { await db.auth.signOut(); location.replace('index.html'); };
+    document.getElementById('logout').onclick = logout;
 
     (async () => {
       const user = await requireLogin();
