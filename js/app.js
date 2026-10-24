@@ -30,6 +30,36 @@ async function requireLogin() {
   return session.user;
 }
 
+// 暱稱玩家：不用登入，玩家編號（join_game 發的）和暱稱存在這支手機的 localStorage
+const PLAYER_KEY = 'amg-player';
+
+function getPlayer() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLAYER_KEY) || 'null');
+    return p && p.id ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePlayer(p) {
+  try { localStorage.setItem(PLAYER_KEY, JSON.stringify(p)); } catch {}
+}
+
+function clearPlayer() {
+  try { localStorage.removeItem(PLAYER_KEY); } catch {}
+}
+
+// 還沒輸入暱稱就導回首頁，並記住原本要去的頁面（包含 ?code=）
+function requirePlayer() {
+  const p = getPlayer();
+  if (!p) {
+    const here = location.pathname.split('/').pop() + location.search;
+    location.replace('index.html?next=' + encodeURIComponent(here));
+  }
+  return p;
+}
+
 // 登出：signOut() 即使 scope 'local' 也會先呼叫伺服器，伺服器出錯時不會清除本機 session，
 // 卡住時也不會返回。所以最多等 3 秒，之後不管結果如何都自己清掉本機的登入資料。
 async function logout() {

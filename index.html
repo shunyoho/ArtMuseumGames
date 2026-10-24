@@ -6,7 +6,7 @@
   <title>美館闖關趣</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261024.2">
+  <link rel="stylesheet" href="css/style.css?v=20261024.4">
 </head>
 <body>
   <header class="topbar">
@@ -20,84 +20,84 @@
       <p>完成任務、找關主掃 QR code，集滿五枚印章！</p>
     </section>
 
-    <section class="card">
-      <div class="tabs" role="tablist">
-        <button type="button" class="active" data-tab="login">登入</button>
-        <button type="button" data-tab="signup">註冊</button>
-      </div>
-
-      <form id="loginForm">
-        <label for="loginEmail">Email</label>
-        <input id="loginEmail" type="email" autocomplete="email" required>
-        <label for="loginPw">密碼</label>
-        <input id="loginPw" type="password" autocomplete="current-password" required>
-        <button class="btn" type="submit">登入開始闖關</button>
-      </form>
-
-      <form id="signupForm" hidden>
-        <label for="signName">暱稱</label>
-        <input id="signName" type="text" maxlength="20" required>
+    <!-- 玩家：輸入暱稱就能玩，不用登入 -->
+    <section class="card" id="playerCard">
+      <form id="playerForm">
+        <label for="nickname">你的暱稱</label>
+        <input id="nickname" type="text" maxlength="20" autocomplete="nickname" required>
         <div class="hint">會顯示在你的闖關頁上</div>
-        <label for="signEmail">Email</label>
-        <input id="signEmail" type="email" autocomplete="email" required>
-        <label for="signPw">密碼</label>
-        <input id="signPw" type="password" autocomplete="new-password" minlength="6" required>
-        <div class="hint">至少 6 碼</div>
-        <button class="btn" type="submit">註冊</button>
+        <button class="btn" type="submit">開始闖關</button>
       </form>
-
-      <div id="msg" class="notice" hidden></div>
+      <div id="playerMsg" class="notice" hidden></div>
     </section>
 
-    <p class="footnote">必須先註冊並登入，才能進入闖關頁</p>
+    <!-- 關主：Email + 密碼 -->
+    <section class="card" id="staffCard" hidden>
+      <h3 style="margin:0 0 4px">關主登入</h3>
+      <form id="staffForm">
+        <label for="staffEmail">Email</label>
+        <input id="staffEmail" type="email" autocomplete="email" required>
+        <label for="staffPw">密碼</label>
+        <input id="staffPw" type="password" autocomplete="current-password" required>
+        <button class="btn" type="submit">登入關主工作台</button>
+      </form>
+      <div id="staffMsg" class="notice" hidden></div>
+    </section>
+
+    <p class="footnote"><button class="link-btn" id="toggleStaff" type="button">我是關主</button></p>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="js/config.js?v=20261024.2"></script>
-  <script src="js/app.js?v=20261024.2"></script>
+  <script src="js/config.js?v=20261024.4"></script>
+  <script src="js/app.js?v=20261024.4"></script>
   <script>
-    const next = safeNext(new URLSearchParams(location.search).get('next'), 'game.html');
-    const msg = document.getElementById('msg');
+    const params = new URLSearchParams(location.search);
+    const wantsStaff = (params.get('next') || '').startsWith('staff.html');
+    const next = safeNext(params.get('next'), 'game.html');
+    const $ = (id) => document.getElementById(id);
 
-    document.getElementById('heroIcons').innerHTML =
+    $('heroIcons').innerHTML =
       ['palette', 'sculpture', 'camera', 'leaf', 'frame'].map((k) => `<span>${icon(k)}</span>`).join('');
 
-    // 已經登入就直接進闖關頁
-    db.auth.getSession().then(({ data: { session } }) => { if (session) location.replace(next); });
+    function showStaff(on) {
+      $('staffCard').hidden = !on;
+      $('playerCard').hidden = on;
+      $('toggleStaff').textContent = on ? '我是玩家，用暱稱開始' : '我是關主';
+    }
+    $('toggleStaff').onclick = () => showStaff($('staffCard').hidden);
+    showStaff(wantsStaff);
 
-    document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
-      document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x === b));
-      document.getElementById('loginForm').hidden = b.dataset.tab !== 'login';
-      document.getElementById('signupForm').hidden = b.dataset.tab !== 'signup';
-      msg.hidden = true;
-    }));
+    function show(el, text) { el.textContent = text; el.hidden = false; }
 
-    function show(text) { msg.textContent = text; msg.hidden = false; }
+    // 已經有身分就直接進去：關主看登入狀態，玩家看手機裡有沒有玩家編號
+    if (wantsStaff) {
+      db.auth.getSession().then(({ data: { session } }) => { if (session) location.replace(next); });
+    } else if (getPlayer()) {
+      location.replace(next);
+    }
 
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    $('playerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.submitter; btn.disabled = true;
+      const nickname = $('nickname').value.trim();
+      const { data: id, error } = await db.rpc('join_game', { p_nickname: nickname });
+      btn.disabled = false;
+      if (error) {
+        return show($('playerMsg'), error.message.includes('invalid_nickname') ? '暱稱請輸入 1～20 個字' : error.message);
+      }
+      savePlayer({ id, nickname });
+      location.replace(wantsStaff ? 'game.html' : next);
+    });
+
+    $('staffForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = e.submitter; btn.disabled = true;
       const { error } = await db.auth.signInWithPassword({
-        email: loginEmail.value.trim(), password: loginPw.value,
+        email: $('staffEmail').value.trim(), password: $('staffPw').value,
       });
       btn.disabled = false;
-      if (error) return show(error.message === 'Invalid login credentials' ? 'Email 或密碼錯誤' : error.message);
-      location.replace(next);
-    });
-
-    document.getElementById('signupForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = e.submitter; btn.disabled = true;
-      const { data, error } = await db.auth.signUp({
-        email: signEmail.value.trim(),
-        password: signPw.value,
-        options: { data: { display_name: signName.value.trim() } },
-      });
-      btn.disabled = false;
-      if (error) return show(error.message);
-      // Confirm email 開著時不會直接拿到 session，要先去收驗證信
-      if (!data.session) return show('註冊成功！請到信箱點擊驗證信，再回來登入。');
-      location.replace(next);
+      if (error) return show($('staffMsg'), error.message === 'Invalid login credentials' ? 'Email 或密碼錯誤' : error.message);
+      location.replace(wantsStaff ? next : 'staff.html');
     });
   </script>
 </body>
