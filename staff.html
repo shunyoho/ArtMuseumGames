@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>關主工作台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">關</span><div>關主工作台<small>美館闖關趣</small></div></div>
+    <button class="link-btn" id="logout">登出</button>
+  </header>
+
+  <main class="wrap">
+    <div id="loading" class="loading">確認身分中…</div>
+
+    <section id="denied" class="card" hidden>
+      <h3 style="margin-top:0">此帳號不是關主</h3>
+      <p class="hint" style="font-size:14px">請管理員在 Supabase 的 <code>staff</code> 表加入你的帳號。</p>
+    </section>
+
+    <section id="picker" hidden>
+      <div class="greet">
+        <h2>選擇你負責的關卡</h2>
+        <p>點選後會顯示大張 QR code，讓玩家掃描</p>
+      </div>
+      <div class="staff-grid" id="grid"></div>
+      <button class="btn ghost" style="margin-top:16px" onclick="window.print()">列印全部 QR code</button>
+    </section>
+
+    <section id="show" class="card qr-show" hidden>
+      <div class="stage-no" id="showNo"></div>
+      <h2 id="showName" style="margin:2px 0 0"></h2>
+      <div class="qr-box" id="qrBig"></div>
+      <p class="hint" style="font-size:14px">請玩家打開闖關頁 →「掃描關主 QR code」</p>
+      <button class="btn ghost" id="back" style="margin-top:12px">返回關卡列表</button>
+    </section>
+
+    <div class="print-sheet" id="printSheet"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let rows = [];
+    const $ = (id) => document.getElementById(id);
+
+    // QR 內容做成完整網址：玩家用 App 內掃描器或手機內建相機都能掃
+    const qrUrl = (code) => new URL('game.html?code=' + code, location.href).href;
+    const drawQr = (el, code) => {
+      el.innerHTML = '';
+      new QRCode(el, { text: qrUrl(code), width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M });
+    };
+
+    function showStage(r, i) {
+      $('picker').hidden = true;
+      $('show').hidden = false;
+      $('showNo').textContent = `第 ${i + 1} 關`;
+      $('showName').textContent = r.name;
+      drawQr($('qrBig'), r.code);
+    }
+
+    $('back').onclick = () => { $('show').hidden = true; $('picker').hidden = false; };
+    $('logout').onclick = async () => { await db.auth.signOut(); location.replace('index.html'); };
+
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+
+      const { data: isStaff } = await db.rpc('is_staff');
+      $('loading').hidden = true;
+      if (!isStaff) return ($('denied').hidden = false);
+
+      const { data, error } = await db.from('stages').select('id,name,icon,stage_codes(code)').order('sort');
+      if (error) return toast(error.message, 'error');
+      // stage_codes 是一對一關聯，PostgREST 會回傳物件；保險起見陣列也處理
+      rows = data.map((s) => ({ ...s, code: [].concat(s.stage_codes ?? [])[0]?.code }));
+
+      $('grid').innerHTML = rows.map((r, i) =>
+        `<button data-i="${i}">${icon(r.icon)}<span class="stage-no">第 ${i + 1} 關</span><strong>${escapeHtml(r.name)}</strong></button>`
+      ).join('');
+      $('grid').querySelectorAll('button').forEach((b) => (b.onclick = () => showStage(rows[b.dataset.i], +b.dataset.i)));
+
+      $('printSheet').innerHTML = rows.map((r, i) =>
+        `<div class="print-page"><div class="stage-no">第 ${i + 1} 關</div><h2>${escapeHtml(r.name)}</h2><div class="qr-box" id="pq${i}"></div><p>請用「美館闖關趣」闖關頁掃描</p></div>`
+      ).join('');
+      rows.forEach((r, i) => drawQr($('pq' + i), r.code));
+
+      $('picker').hidden = false;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>闖關地圖</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">美</span><div>美館闖關趣<small>高雄市立美術館</small></div></div>
+    <button class="link-btn" id="logout">登出</button>
+  </header>
+
+  <main class="wrap">
+    <section class="greet">
+      <h2 id="hello">歡迎</h2>
+      <p>完成任務後，請關主出示 QR code 讓你掃描</p>
+    </section>
+
+    <section class="card progress-card">
+      <svg class="ring" viewBox="0 0 80 80">
+        <circle class="bg" cx="40" cy="40" r="33"/>
+        <circle class="fg" id="ringFg" cx="40" cy="40" r="33" stroke-dasharray="207.3" stroke-dashoffset="207.3"/>
+        <text x="40" y="47" text-anchor="middle" id="ringText">0/5</text>
+      </svg>
+      <div>
+        <h3 id="progTitle">集章進度</h3>
+        <p id="progSub">還沒有蓋到印章，出發吧！</p>
+      </div>
+    </section>
+
+    <ol class="trail" id="trail"><li class="loading">載入關卡中…</li></ol>
+
+    <section class="complete" id="complete" hidden>
+      <h3>恭喜全數通關！</h3>
+      <p>請出示此畫面至服務台領取紀念品</p>
+    </section>
+  </main>
+
+  <div class="scan-bar">
+    <button class="btn" id="scanBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/></svg>
+      掃描關主 QR code
+    </button>
+  </div>
+
+  <!-- 掃描相機 -->
+  <div class="overlay" id="scanOverlay">
+    <h3>對準關主的 QR code</h3>
+    <p>掃描成功會自動蓋章</p>
+    <div id="reader"></div>
+    <button class="btn ghost" id="closeScan" style="color:#fff;border-color:#4b5a5c">取消</button>
+  </div>
+
+  <!-- 掃描結果 -->
+  <div class="overlay" id="resultOverlay">
+    <div class="result">
+      <div class="big-icon" id="resIcon"></div>
+      <h3 id="resTitle"></h3>
+      <p id="resText"></p>
+      <button class="btn" id="resOk">好</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let stages = [];
+    let cleared = new Set();
+    let scanner = null;
+    let busy = false;
+
+    async function load(justId) {
+      const [s, p] = await Promise.all([
+        db.from('stages').select('id,name,description,icon').order('sort'),
+        db.from('progress').select('stage_id'),
+      ]);
+      if (s.error || p.error) return toast((s.error || p.error).message, 'error');
+      stages = s.data;
+      cleared = new Set(p.data.map((r) => r.stage_id));
+      render(justId);
+    }
+
+    function render(justId) {
+      const total = stages.length || 5;
+      const n = stages.filter((s) => cleared.has(s.id)).length;
+
+      document.getElementById('trail').innerHTML = stages.map((s, i) => {
+        const done = cleared.has(s.id);
+        return `<li class="stage ${done ? 'done' : ''} ${s.id === justId ? 'just' : ''}">
+          <div class="stage-icon">${icon(s.icon)}</div>
+          <div class="stage-body">
+            <div class="stage-no">第 ${i + 1} 關</div>
+            <h3>${escapeHtml(s.name)}</h3>
+            <p>${escapeHtml(s.description)}</p>
+          </div>
+          ${done ? '<div class="stamp">已<br>過關</div>' : '<span class="pending-tag">未完成</span>'}
+        </li>`;
+      }).join('');
+
+      document.getElementById('ringText').textContent = `${n}/${total}`;
+      document.getElementById('ringFg').style.strokeDashoffset = 207.3 * (1 - n / total);
+      document.getElementById('progSub').textContent =
+        n === 0 ? '還沒有蓋到印章，出發吧！' : n === total ? '五枚印章全部到手！' : `再 ${total - n} 關就全數通關`;
+      document.getElementById('complete').hidden = n !== total;
+    }
+
+    // QR 內容可能是完整網址（…/game.html?code=xxx）或單純密碼
+    function extractCode(text) {
+      try { return new URL(text).searchParams.get('code') || ''; } catch { return text.trim(); }
+    }
+
+    async function claim(code) {
+      if (busy || !code) return;
+      busy = true;
+      const { data, error } = await db.rpc('claim_stage', { p_code: code });
+      busy = false;
+      if (error) {
+        const bad = error.message.includes('invalid_code');
+        return showResult(false, bad ? '這不是有效的關卡 QR code' : error.message);
+      }
+      const st = stages.find((s) => s.id === data.stage_id);
+      showResult(true, data.already ? `「${data.stage_name}」之前已經過關囉` : `「${data.stage_name}」過關！`, st?.icon);
+      await load(data.already ? null : data.stage_id);
+    }
+
+    function showResult(ok, text, iconKey) {
+      document.getElementById('resIcon').innerHTML = ok ? icon(iconKey) : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
+      document.getElementById('resIcon').style.background = ok ? 'var(--seal)' : 'var(--muted)';
+      document.getElementById('resTitle').textContent = ok ? '蓋章成功' : '掃描失敗';
+      document.getElementById('resText').textContent = text;
+      document.getElementById('resultOverlay').classList.add('open');
+    }
+
+    async function openScanner() {
+      document.getElementById('scanOverlay').classList.add('open');
+      scanner = scanner || new Html5Qrcode('reader');
+      try {
+        await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 230 }, async (text) => {
+          await closeScanner();
+          claim(extractCode(text));
+        });
+      } catch (err) {
+        await closeScanner();
+        toast('無法開啟相機，請確認已允許相機權限', 'error');
+      }
+    }
+
+    async function closeScanner() {
+      document.getElementById('scanOverlay').classList.remove('open');
+      if (scanner?.isScanning) await scanner.stop();
+    }
+
+    document.getElementById('scanBtn').onclick = openScanner;
+    document.getElementById('closeScan').onclick = closeScanner;
+    document.getElementById('resOk').onclick = () => document.getElementById('resultOverlay').classList.remove('open');
+    document.getElementById('logout').onclick = async () => { await db.auth.signOut(); location.replace('index.html'); };
+
+    (async () => {
+      const user = await requireLogin();
+      if (!user) return;
+      document.getElementById('hello').textContent = `${user.user_metadata?.display_name || '玩家'}，歡迎來闖關`;
+      await load();
+
+      // 用手機內建相機掃到網址進來的情況：自動兌換，再把 ?code= 從網址拿掉
+      const code = new URLSearchParams(location.search).get('code');
+      if (code) {
+        history.replaceState(null, '', 'game.html');
+        claim(code);
+      }
+    })();
+  </script>
+</body>
+</html>
