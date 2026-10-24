@@ -30,11 +30,21 @@ async function requireLogin() {
   return session.user;
 }
 
-// 登出：scope 'local' 只清除這台裝置的登入狀態，不需要連線，所以不會因為網路或伺服器錯誤而登出失敗
+// 登出：signOut() 即使 scope 'local' 也會先呼叫伺服器，伺服器出錯時不會清除本機 session，
+// 卡住時也不會返回。所以最多等 3 秒，之後不管結果如何都自己清掉本機的登入資料。
 async function logout() {
   try {
-    await db.auth.signOut({ scope: 'local' });
+    const timeout = new Promise((r) => setTimeout(() => r({ error: new Error('signOut timeout') }), 3000));
+    const { error } = await Promise.race([db.auth.signOut({ scope: 'local' }), timeout]);
+    if (error) console.warn('signOut error:', error);
+  } catch (e) {
+    console.warn('signOut error:', e);
   } finally {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('sb-') && k.includes('-auth-token'))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {}
     location.replace('index.html');
   }
 }
