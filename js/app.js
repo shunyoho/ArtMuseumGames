@@ -30,7 +30,7 @@ async function requireLogin() {
   return session.user;
 }
 
-// 暱稱玩家：不用登入，玩家編號（join_game 發的）和暱稱存在這支手機的 localStorage
+// 玩家：不用登入，玩家編號（join_game 發的）和名字存在這支手機的 localStorage
 const PLAYER_KEY = 'amg-player';
 
 function getPlayer() {
@@ -47,10 +47,14 @@ function savePlayer(p) {
 }
 
 function clearPlayer() {
-  try { localStorage.removeItem(PLAYER_KEY); } catch {}
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k === PLAYER_KEY || k.startsWith(PLAYER_KEY + '-thumb-'))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
 }
 
-// 還沒輸入暱稱就導回首頁，並記住原本要去的頁面（包含 ?code=）
+// 還沒選組別、填名字就導回首頁，並記住原本要去的頁面（包含 ?code=）
 function requirePlayer() {
   const p = getPlayer();
   if (!p) {

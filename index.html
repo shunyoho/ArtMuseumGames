@@ -3,29 +3,46 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>美館闖關趣</title>
+  <title>高美館失落的藝術能量</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261024.4">
+  <link rel="stylesheet" href="css/style.css?v=20261031.1">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">美</span><div>美館闖關趣<small>活動位置:高雄市立美術館</small></div></div>
+    <div class="brand"><span class="brand-mark">美</span><div>高美館失落的藝術能量<small>活動位置:高雄市立美術館</small></div></div>
   </header>
 
   <main class="wrap">
     <section class="hero">
-      <div class="hero-icons" id="heroIcons"></div>
-      <h1>五關集章挑戰</h1>
-      <p>完成任務、找關主掃 QR code，集滿五枚印章！</p>
+      <h1>🏛️《高美館失落的藝術能量》闖關遊戲說明</h1>
+      <p>🎮 歡迎來到高美館藝術探險！</p>
+      <p>今天，高美館的六種藝術能量突然消失了！請各位藝術探險家組隊出發，完成個人闖關任務與小組合作挑戰，找回失落的藝術能量！</p>
+      <p>準備好了嗎？讓我們開始今天的藝術冒險！</p>
     </section>
 
-    <!-- 玩家：輸入暱稱就能玩，不用登入 -->
+    <section class="card rules" id="rulesCard">
+      <h3>📌 遊戲規則</h3>
+      <ol>
+        <li><strong>確認分組：</strong>請確認自己的組別及組員，並依照老師的指示開始闖關。</li>
+        <li><strong>登入遊戲表單：</strong>請依照老師的指示進入遊戲表單，並使用指定的版本完成任務。</li>
+        <li><strong>確認起始樓層：</strong>每組會被分配不同的起始樓層，請依照指定位置開始探索。</li>
+        <li><strong>完成個人任務：</strong>請依照任務說明尋找作品、觀察細節並完成作答。</li>
+        <li><strong>通過關主確認：</strong>完成每個樓層的任務後，請交由該樓層關主確認。確認完成後，才能前往下一個樓層。</li>
+        <li><strong>遵守集合時間：</strong>全組完成個人任務後，請領取小組合作任務，並於 <strong><u>11:00</u></strong> 返回集合地點。</li>
+        <li><strong>團隊合作：</strong>請與組員互相協助，共同完成最後的合作挑戰。</li>
+      </ol>
+    </section>
+
+    <!-- 玩家：選組別、填名字就能玩，不用登入 -->
     <section class="card" id="playerCard">
       <form id="playerForm">
-        <label for="nickname">你的暱稱</label>
-        <input id="nickname" type="text" maxlength="20" autocomplete="nickname" required>
-        <div class="hint">會顯示在你的闖關頁上</div>
+        <fieldset class="team-options">
+          <legend>我的組別 <span class="required">*</span></legend>
+          <div id="teamOptions" class="hint">載入組別中…</div>
+        </fieldset>
+        <label for="nickname">我的名字 <span class="required">*</span></label>
+        <input id="nickname" type="text" maxlength="20" autocomplete="name" required>
         <button class="btn" type="submit">開始闖關</button>
       </form>
       <div id="playerMsg" class="notice" hidden></div>
@@ -48,21 +65,19 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="js/config.js?v=20261024.4"></script>
-  <script src="js/app.js?v=20261024.4"></script>
+  <script src="js/config.js?v=20261031.1"></script>
+  <script src="js/app.js?v=20261031.1"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const wantsStaff = (params.get('next') || '').startsWith('staff.html');
     const next = safeNext(params.get('next'), 'game.html');
     const $ = (id) => document.getElementById(id);
 
-    $('heroIcons').innerHTML =
-      ['palette', 'sculpture', 'camera', 'leaf', 'frame'].map((k) => `<span>${icon(k)}</span>`).join('');
-
     function showStaff(on) {
       $('staffCard').hidden = !on;
       $('playerCard').hidden = on;
-      $('toggleStaff').textContent = on ? '我是玩家，用暱稱開始' : '我是關主';
+      $('rulesCard').hidden = on;
+      $('toggleStaff').textContent = on ? '我是玩家，開始闖關' : '我是關主';
     }
     $('toggleStaff').onclick = () => showStaff($('staffCard').hidden);
     showStaff(wantsStaff);
@@ -76,14 +91,24 @@
       location.replace(next);
     }
 
+    db.from('teams').select('id,name').order('id').then(({ data, error }) => {
+      if (error) return show($('playerMsg'), error.message);
+      $('teamOptions').className = '';
+      $('teamOptions').innerHTML = data.map((t) =>
+        `<label class="team-option"><input type="radio" name="team" value="${t.id}" required>${escapeHtml(t.name)}</label>`
+      ).join('');
+    });
+
     $('playerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const team = new FormData(e.target).get('team');
+      if (!team) return show($('playerMsg'), '請選擇組別');
       const btn = e.submitter; btn.disabled = true;
       const nickname = $('nickname').value.trim();
-      const { data: id, error } = await db.rpc('join_game', { p_nickname: nickname });
+      const { data: id, error } = await db.rpc('join_game', { p_nickname: nickname, p_team: +team });
       btn.disabled = false;
       if (error) {
-        return show($('playerMsg'), error.message.includes('invalid_nickname') ? '暱稱請輸入 1～20 個字' : error.message);
+        return show($('playerMsg'), error.message.includes('invalid_nickname') ? '名字請輸入 1～20 個字' : error.message);
       }
       savePlayer({ id, nickname });
       location.replace(wantsStaff ? 'game.html' : next);

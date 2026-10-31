@@ -3,54 +3,54 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>闖關地圖</title>
+  <title>闖關任務｜高美館失落的藝術能量</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261024.4">
+  <link rel="stylesheet" href="css/style.css?v=20261031.1">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">美</span><div>美館闖關趣<small>活動位置:高雄市立美術館</small></div></div>
+    <div class="brand"><span class="brand-mark">美</span><div>高美館失落的藝術能量<small>活動位置:高雄市立美術館</small></div></div>
     <button class="link-btn" id="logout">離開</button>
   </header>
 
   <main class="wrap">
     <section class="greet">
       <h2 id="hello">歡迎</h2>
-      <p>完成任務後，請關主出示 QR code 讓你掃描</p>
+      <p id="routeText"></p>
     </section>
 
     <section class="card progress-card">
       <svg class="ring" viewBox="0 0 80 80">
         <circle class="bg" cx="40" cy="40" r="33"/>
         <circle class="fg" id="ringFg" cx="40" cy="40" r="33" stroke-dasharray="207.3" stroke-dashoffset="207.3"/>
-        <text x="40" y="47" text-anchor="middle" id="ringText">0/5</text>
+        <text x="40" y="47" text-anchor="middle" id="ringText">0/3</text>
       </svg>
       <div>
-        <h3 id="progTitle">集章進度</h3>
-        <p id="progSub">還沒有蓋到印章，出發吧！</p>
+        <h3>闖關進度</h3>
+        <p id="progSub"></p>
       </div>
     </section>
 
-    <ol class="trail" id="trail"><li class="loading">載入關卡中…</li></ol>
+    <ol class="trail" id="trail"><li class="loading">載入任務中…</li></ol>
 
     <section class="complete" id="complete" hidden>
-      <h3>恭喜全數通關！</h3>
-      <p>請出示此畫面至服務台領取紀念品</p>
+      <h3>恭喜過關個人任務！！能量就差一點拉拉拉。</h3>
+      <p>請找到你的小組成員，請一起到三樓中間找關主領取小組任務，並於 11:00 返回集合地點。</p>
     </section>
   </main>
 
-  <div class="scan-bar">
+  <div class="scan-bar" id="scanBar" hidden>
     <button class="btn" id="scanBtn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/></svg>
-      掃描關主 QR code
+      作答完成，掃描關主 QR code
     </button>
   </div>
 
   <!-- 掃描相機 -->
   <div class="overlay" id="scanOverlay">
     <h3>對準關主的 QR code</h3>
-    <p>掃描成功會自動蓋章</p>
+    <p>掃描成功就能前往下一個樓層</p>
     <div id="reader"></div>
     <button class="btn ghost" id="closeScan" style="color:#fff;border-color:#4b5a5c">取消</button>
   </div>
@@ -67,71 +67,222 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="js/config.js?v=20261024.4"></script>
-  <script src="js/app.js?v=20261024.4"></script>
+  <script src="js/config.js?v=20261031.1"></script>
+  <script src="js/app.js?v=20261031.1"></script>
   <script>
-    let stages = [];
+    let stages = [];     // 已依這位玩家的組別路線排好順序
+    let questions = [];
     let cleared = new Set();
+    let answers = {};    // { 題目 id: { text, file_path } }
     let scanner = null;
     let busy = false;
     let player = null;
 
-    // 資料庫裡找不到這個玩家編號（例如資料被清掉），就讓玩家重新輸入暱稱
+    const saveTimers = {};
+    const inFlight = new Set();
+
+    // 資料庫裡找不到這個玩家編號（例如資料被清掉），就讓玩家重新選組別、填名字
     function restart() {
       clearPlayer();
       location.replace('index.html');
     }
 
     async function load(justId) {
-      const [s, p] = await Promise.all([
-        db.from('stages').select('id,name,description,icon').order('sort'),
+      const [s, q, p] = await Promise.all([
+        db.from('stages').select('id,name,title,description,icon'),
+        db.from('questions').select('id,stage_id,kind,title,hint,required').order('sort'),
         db.rpc('get_player', { p_player: player.id }),
       ]);
-      if (s.error || p.error) return toast((s.error || p.error).message, 'error');
+      const failed = s.error || q.error || p.error;
+      if (failed) return toast(failed.message, 'error');
       if (!p.data) return restart();
-      stages = s.data;
+      stages = p.data.route.map((id) => s.data.find((x) => x.id === id));
+      questions = q.data;
       cleared = new Set(p.data.cleared);
+      answers = p.data.answers;
+      document.getElementById('routeText').textContent =
+        `${p.data.team_name}路線：${stages.map((x) => x.name).join(' → ')}`;
       render(justId);
     }
 
+    const currentStage = () => stages.find((s) => !cleared.has(s.id));
+
+    function isAnswered(q) {
+      const a = answers[q.id];
+      return q.kind === 'photo' ? !!a?.file_path : !!a?.text?.trim();
+    }
+
+    function missingCount() {
+      const cur = currentStage();
+      return questions.filter((q) => q.stage_id === cur?.id && q.required && !isAnswered(q)).length;
+    }
+
+    function photoSlot(q) {
+      const thumb = getThumb(q.id);
+      const done = !!answers[q.id]?.file_path;
+      return `${thumb ? `<img class="q-thumb" src="${thumb}" alt="已上傳的照片">` : ''}
+        ${done ? '<div class="q-done">已上傳</div>' : ''}
+        <label class="btn ghost q-upload">
+          <input type="file" accept="image/*" data-q="${q.id}" hidden>
+          ${done ? '重新上傳' : '新增照片'}
+        </label>`;
+    }
+
+    function questionHtml(q) {
+      const mark = q.required ? ' <span class="required">*</span>' : '';
+      const field = q.kind === 'photo'
+        ? `<div id="photo${q.id}">${photoSlot(q)}</div>`
+        : `<textarea rows="2" maxlength="1000" data-q="${q.id}" placeholder="簡答文字">${escapeHtml(answers[q.id]?.text)}</textarea>`;
+      return `<div class="question">
+        <h4>${escapeHtml(q.title)}${mark}</h4>
+        ${q.hint ? `<p class="q-hint">${escapeHtml(q.hint)}</p>` : ''}
+        ${field}
+      </div>`;
+    }
+
     function render(justId) {
-      const total = stages.length || 5;
+      const total = stages.length;
       const n = stages.filter((s) => cleared.has(s.id)).length;
+      const cur = currentStage();
 
       document.getElementById('trail').innerHTML = stages.map((s, i) => {
         const done = cleared.has(s.id);
-        return `<li class="stage ${done ? 'done' : ''} ${s.id === justId ? 'just' : ''}">
-          <div class="stage-icon">${icon(s.icon)}</div>
+        const open = s === cur;
+        const head = `<div class="stage-icon">${icon(s.icon)}</div>
           <div class="stage-body">
-            <div class="stage-no">第 ${i + 1} 關</div>
+            <div class="stage-no">第 ${i + 1} 站</div>
             <h3>${escapeHtml(s.name)}</h3>
-            <p>${escapeHtml(s.description)}</p>
           </div>
-          ${done ? '<div class="stamp">已<br>過關</div>' : '<span class="pending-tag">未完成</span>'}
+          ${done ? '<div class="stamp">已<br>過關</div>' : open ? '' : '<span class="pending-tag">尚未開放</span>'}`;
+        if (!open) return `<li class="stage ${done ? 'done' : ''} ${s.id === justId ? 'just' : ''}">${head}</li>`;
+        return `<li class="stage current">
+          <div class="stage-head">${head}</div>
+          <h3 class="task-title">${escapeHtml(s.title)}</h3>
+          <p class="task-desc">${escapeHtml(s.description)}</p>
+          ${questions.filter((q) => q.stage_id === s.id).map(questionHtml).join('')}
+          <p class="hint">答案會自動儲存。完成後請交由${escapeHtml(s.name)}關主確認。</p>
         </li>`;
       }).join('');
 
       document.getElementById('ringText').textContent = `${n}/${total}`;
       document.getElementById('ringFg').style.strokeDashoffset = 207.3 * (1 - n / total);
       document.getElementById('progSub').textContent =
-        n === 0 ? '還沒有蓋到印章，出發吧！' : n === total ? '五枚印章全部到手！' : `再 ${total - n} 關就全數通關`;
-      document.getElementById('complete').hidden = n !== total;
+        cur ? `現在請前往${cur.name}` : '個人任務全部完成！';
+      document.getElementById('complete').hidden = !!cur;
+      document.getElementById('scanBar').hidden = !cur;
+
+      if (justId) document.querySelector('.stage.current, #complete:not([hidden])')?.scrollIntoView({ block: 'start' });
     }
 
+    // ---------- 存答案 ----------
+    function track(promise) {
+      inFlight.add(promise);
+      promise.finally(() => inFlight.delete(promise));
+      return promise;
+    }
+
+    async function saveText(id) {
+      delete saveTimers[id];
+      const { error } = await db.rpc('save_answer', {
+        p_player: player.id, p_question: id, p_text: answers[id]?.text ?? '', p_file_path: null,
+      });
+      if (error) toast('答案儲存失敗，請檢查網路後再試一次', 'error');
+    }
+
+    // 掃描前呼叫：把還在等待的答案送出，並等全部存完
+    async function flushSaves() {
+      Object.keys(saveTimers).forEach((id) => {
+        clearTimeout(saveTimers[id]);
+        track(saveText(+id));
+      });
+      await Promise.all(inFlight);
+    }
+
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unsupported_image')); };
+        img.src = url;
+      });
+    }
+
+    function drawScaled(img, maxSide) {
+      const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    }
+
+    // 照片讀不回來（bucket 是私有的），留一張小縮圖在手機上，讓關主確認時看得到
+    const thumbKey = (id) => `${PLAYER_KEY}-thumb-${player.id}-${id}`;
+    function getThumb(id) {
+      try { return localStorage.getItem(thumbKey(id)); } catch { return null; }
+    }
+    function saveThumb(id, dataUrl) {
+      try { localStorage.setItem(thumbKey(id), dataUrl); } catch {}
+    }
+
+    async function uploadPhoto(id, file) {
+      const slot = document.getElementById('photo' + id);
+      slot.querySelector('.q-upload').classList.add('uploading');
+      slot.querySelector('.q-upload').lastChild.textContent = '上傳中…';
+      try {
+        // 手機原圖常有數 MB，縮小後再傳，館內網路也比較快
+        const img = await loadImage(file);
+        const blob = await new Promise((r) => drawScaled(img, 1600).toBlob(r, 'image/jpeg', 0.8));
+        const path = `${player.id}/${id}-${Date.now()}.jpg`;
+        const up = await db.storage.from('answers').upload(path, blob, { contentType: 'image/jpeg' });
+        if (up.error) throw up.error;
+        const { error } = await db.rpc('save_answer', {
+          p_player: player.id, p_question: id, p_text: null, p_file_path: path,
+        });
+        if (error) throw error;
+        answers[id] = { file_path: path };
+        saveThumb(id, drawScaled(img, 320).toDataURL('image/jpeg', 0.6));
+      } catch (err) {
+        toast(err.message === 'unsupported_image' ? '這張照片的格式無法讀取，請換一張' : '照片上傳失敗，請再試一次', 'error');
+      }
+      slot.innerHTML = photoSlot(questions.find((q) => q.id === id));
+    }
+
+    document.getElementById('trail').addEventListener('input', (e) => {
+      if (e.target.tagName !== 'TEXTAREA') return;
+      const id = +e.target.dataset.q;
+      answers[id] = { text: e.target.value };
+      clearTimeout(saveTimers[id]);
+      saveTimers[id] = setTimeout(() => track(saveText(id)), 600);
+    });
+
+    document.getElementById('trail').addEventListener('change', (e) => {
+      if (e.target.type === 'file' && e.target.files[0]) track(uploadPhoto(+e.target.dataset.q, e.target.files[0]));
+    });
+
+    // ---------- 掃 QR 過關 ----------
     // QR 內容可能是完整網址（…/game.html?code=xxx）或單純密碼
     function extractCode(text) {
       try { return new URL(text).searchParams.get('code') || ''; } catch { return text.trim(); }
     }
 
+    function claimError(message) {
+      if (message.includes('invalid_code')) return '這不是有效的關卡 QR code';
+      if (message.includes('wrong_floor')) return `這不是你現在的樓層，請先完成${currentStage()?.name ?? '目前的任務'}`;
+      if (message.includes('incomplete')) return '這個樓層還有必填題沒完成';
+      return message;
+    }
+
     async function claim(code) {
       if (busy || !code) return;
       busy = true;
+      await flushSaves();
       const { data, error } = await db.rpc('claim_stage_as_player', { p_player: player.id, p_code: code });
       busy = false;
       if (error) {
         if (error.message.includes('invalid_player')) return restart();
-        const bad = error.message.includes('invalid_code');
-        return showResult(false, bad ? '這不是有效的關卡 QR code' : error.message);
+        return showResult(false, claimError(error.message));
       }
       const st = stages.find((s) => s.id === data.stage_id);
       showResult(true, data.already ? `「${data.stage_name}」之前已經過關囉` : `「${data.stage_name}」過關！`, st?.icon);
@@ -141,7 +292,7 @@
     function showResult(ok, text, iconKey) {
       document.getElementById('resIcon').innerHTML = ok ? icon(iconKey) : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg>';
       document.getElementById('resIcon').style.background = ok ? 'var(--seal)' : 'var(--muted)';
-      document.getElementById('resTitle').textContent = ok ? '蓋章成功' : '掃描失敗';
+      document.getElementById('resTitle').textContent = ok ? '關主確認成功' : '還不能過關';
       document.getElementById('resText').textContent = text;
       document.getElementById('resultOverlay').classList.add('open');
     }
@@ -165,7 +316,12 @@
       if (scanner?.isScanning) await scanner.stop();
     }
 
-    document.getElementById('scanBtn').onclick = openScanner;
+    document.getElementById('scanBtn').onclick = async () => {
+      await flushSaves();
+      const n = missingCount();
+      if (n) return toast(`還有 ${n} 題必填題沒完成`, 'error');
+      openScanner();
+    };
     document.getElementById('closeScan').onclick = closeScanner;
     document.getElementById('resOk').onclick = () => document.getElementById('resultOverlay').classList.remove('open');
     // 玩家編號只存在這支手機，離開後就找不回來，闖關紀錄也等於消失

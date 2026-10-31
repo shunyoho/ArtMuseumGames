@@ -6,11 +6,11 @@
   <title>關主工作台</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261024.4">
+  <link rel="stylesheet" href="css/style.css?v=20261031.1">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">關</span><div>關主工作台<small>美館闖關趣</small></div></div>
+    <div class="brand"><span class="brand-mark">關</span><div>關主工作台<small>高美館失落的藝術能量</small></div></div>
     <button class="link-btn" id="logout">登出</button>
   </header>
 
@@ -24,7 +24,7 @@
 
     <section id="picker" hidden>
       <div class="greet">
-        <h2>選擇你負責的關卡</h2>
+        <h2>選擇你負責的樓層</h2>
         <p>點選後會顯示大張 QR code，讓玩家掃描</p>
       </div>
       <div class="staff-grid" id="grid"></div>
@@ -32,11 +32,10 @@
     </section>
 
     <section id="show" class="card qr-show" hidden>
-      <div class="stage-no" id="showNo"></div>
       <h2 id="showName" style="margin:2px 0 0"></h2>
       <div class="qr-box" id="qrBig"></div>
       <p class="hint" style="font-size:14px">請玩家打開闖關頁 →「掃描關主 QR code」</p>
-      <button class="btn ghost" id="back" style="margin-top:12px">返回關卡列表</button>
+      <button class="btn ghost" id="back" style="margin-top:12px">返回樓層列表</button>
     </section>
 
     <div class="print-sheet" id="printSheet"></div>
@@ -44,8 +43,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="js/config.js?v=20261024.4"></script>
-  <script src="js/app.js?v=20261024.4"></script>
+  <script src="js/config.js?v=20261031.1"></script>
+  <script src="js/app.js?v=20261031.1"></script>
   <script>
     let rows = [];
     const $ = (id) => document.getElementById(id);
@@ -57,10 +56,9 @@
       new QRCode(el, { text: qrUrl(code), width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M });
     };
 
-    function showStage(r, i) {
+    function showStage(r) {
       $('picker').hidden = true;
       $('show').hidden = false;
-      $('showNo').textContent = `第 ${i + 1} 關`;
       $('showName').textContent = r.name;
       drawQr($('qrBig'), r.code);
     }
@@ -82,12 +80,12 @@
       rows = data.map((s) => ({ ...s, code: [].concat(s.stage_codes ?? [])[0]?.code }));
 
       $('grid').innerHTML = rows.map((r, i) =>
-        `<button data-i="${i}">${icon(r.icon)}<span class="stage-no">第 ${i + 1} 關</span><strong>${escapeHtml(r.name)}</strong></button>`
+        `<button data-i="${i}">${icon(r.icon)}<strong>${escapeHtml(r.name)}</strong></button>`
       ).join('');
-      $('grid').querySelectorAll('button').forEach((b) => (b.onclick = () => showStage(rows[b.dataset.i], +b.dataset.i)));
+      $('grid').querySelectorAll('button').forEach((b) => (b.onclick = () => showStage(rows[b.dataset.i])));
 
       $('printSheet').innerHTML = rows.map((r, i) =>
-        `<div class="print-page"><div class="stage-no">第 ${i + 1} 關</div><h2>${escapeHtml(r.name)}</h2><div class="qr-box" id="pq${i}"></div><p>請用「美館闖關趣」闖關頁掃描</p></div>`
+        `<div class="print-page"><h2>${escapeHtml(r.name)}</h2><div class="qr-box" id="pq${i}"></div><p>請用闖關頁掃描</p></div>`
       ).join('');
       rows.forEach((r, i) => drawQr($('pq' + i), r.code));
 
