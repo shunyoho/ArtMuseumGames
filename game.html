@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>闖關任務｜高美館失落的藝術能量</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261031.1">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=20261031.2">
 </head>
 <body>
   <header class="topbar">
@@ -14,7 +14,7 @@
     <button class="link-btn" id="logout">離開</button>
   </header>
 
-  <main class="wrap">
+  <main class="wrap with-sky">
     <section class="greet">
       <h2 id="hello">歡迎</h2>
       <p id="routeText"></p>
@@ -67,8 +67,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="js/config.js?v=20261031.1"></script>
-  <script src="js/app.js?v=20261031.1"></script>
+  <script src="js/config.js?v=20261031.2"></script>
+  <script src="js/app.js?v=20261031.2"></script>
+  <script src="js/scene.js?v=20261031.2"></script>
   <script>
     let stages = [];     // 已依這位玩家的組別路線排好順序
     let questions = [];

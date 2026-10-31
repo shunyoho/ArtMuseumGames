@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>高美館失落的藝術能量</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261031.1">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=20261031.2">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">美</span><div>高美館失落的藝術能量<small>活動位置:高雄市立美術館</small></div></div>
   </header>
 
-  <main class="wrap">
+  <main class="wrap with-sky">
     <section class="hero">
       <h1>🏛️《高美館失落的藝術能量》闖關遊戲說明</h1>
       <p>🎮 歡迎來到高美館藝術探險！</p>
@@ -65,8 +65,9 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="js/config.js?v=20261031.1"></script>
-  <script src="js/app.js?v=20261031.1"></script>
+  <script src="js/config.js?v=20261031.2"></script>
+  <script src="js/app.js?v=20261031.2"></script>
+  <script src="js/scene.js?v=20261031.2"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const wantsStaff = (params.get('next') || '').startsWith('staff.html');

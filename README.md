@@ -22,6 +22,7 @@ Supabase
 | `game.html` | 玩家闖關頁：作答、上傳照片、掃關主 QR code |
 | `staff.html` | 關主工作台：顯示與列印各樓層 QR code |
 | `js/app.js` | 共用：Supabase client、玩家身分、icon、提示訊息 |
+| `js/scene.js` | 背景場景：楓樹葉叢與枝條隨風擺動、楓葉飄落、雲朵飄過 |
 | `js/config.js` | Supabase URL 和 publishable key |
 | `sql/` | 資料庫結構，要依序執行 |
 
